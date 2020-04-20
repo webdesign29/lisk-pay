@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiskPay DEMO</title>
+    <script src="https://unpkg.com/vue@2.1.5/dist/vue.js"></script>
+    <script
+    src="https://code.jquery.com/jquery-3.4.1.js"
+    integrity="sha256-WpOohJOqMqqyKL9FccASB9O0KwACQJpFTUBLTYOVvVU="
+    crossorigin="anonymous"></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.5.0/Tween.min.js"
+    integrity="sha256-hAigqn/ls/F8odRXfZZ0eXydihnV3bafe61O0roKYEM="
+    crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tinycolor/1.4.1/tinycolor.min.js"></script>
+    <link rel="stylesheet" href="./assets/css/lisk-pay.css">
+    <script type='text/javascript' src='./assets/js/qr-vue.js'></script>
+</head>
+<body>
+    <div id="lisk-pay"><app-component></app-component></div>
+    <script>
+        jQuery(document).ready(function($){
+            $( document ).on( "LiskPayEvent", {}, function( event, liskPayAction ) {
+                console.log( "Running event", event, liskPayAction );
+                if(liskPayAction === "hidePaymentConfirm") {
+                    jQuery('#place_order').hide();
+                } else if(liskPayAction === "PaymentConfirm") {
+                    jQuery('#place_order').trigger('click');
+                }
+            });
+        });
+    </script>
+    <script type="text/x-template" id="app-template">
+        <div>
+            <a href="#" @click.stop="startPayment" :class="btnClasses">{{ btnLabel }}</a>
+            <div class="lisk-pay-modal" v-show="showModal">
+                <div class="inside-modal">
+                    <span @click.stop="cancelPayment" class="close-icon-btn"></span>
+                    <div class="modal-content">
+                        <div class="l-row modal-title">
+                            <div class="payment-meta">
+                                <div class="meta-row exchange-rate">
+                                    1 LSK = {{ unitValue | toFixed(2) | withSymbol( asset ) }}
+                                </div>
+                                <div class="meta-row ref">
+                                    Your Order ID : #{{ liskPayData.id }}
+                                </div>
+                            </div>
+                            <h3><img class="liskLogo" :src="logo" alt="" /> <span>Pay</span></h3>
+                        </div>
+                        <div class="l-row progress" :style="progressStateStyle">
+                            <span class="progress__state">{{ paymentStatusLabel }}</span>
+                            <div class="progress__track-position">
+                                <div class="progress__track"></div>
+                                <div :style="progressStyle" class="progress__bar"></div>
+                            </div>
+                            <div class="progress__label">{{ progress | minuteSeconds }}</div>
+                        </div>
+                        
+                        
+                        <nav class="l-row tab-selector-row">
+                            <div class="tab-selector-position">
+                                <ul class="tab-selector">
+                                    <template v-for="tab in tabs">
+                                        <li><a :style="isCurrentTabStyle(tab)" href="#" @click="selectTab(tab)">{{ tab.label }}</a></li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </nav>
+                        
+                        <div v-show="isCurrentTab(tabs.order)" class="l-tab l-row order">
+                            <div class="modal-order-info">
+                                <h3 class="payment-warning">
+                                    To complete your payment please send exactly<br>
+                                    <b>{{ liskPayData.amount | toFixed(2) | withSymbol( 'LSK' ) }}</b> using the methods bellow
+                                </h3>
+                                
+                                <div class="order-r input-w-to">
+                                    <label>
+                                        <span class='l-input-label'>PayTo address : </span>
+                                        <div class="input-decoration-w">
+                                            <img :src="assetImage" alt="">
+                                            <input disabled='disabled' type='text' :value="liskPayData.payToKey">
+                                            <a @click="toggleQrCode('main')" href="#" :class="{ 'active': qrIsToggled('main') }" class="qr-code">
+                                                <qrcode  value="liskPayData.payToKey" :options="{ color: { dark: '#101c3d' }, width: 600, height: 600 }"></qrcode>
+                                            </a>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="order-r hubLink">
+                                    <a target="_blank" :href="liskHubLink">Pay {{ liskPayData.amount }} LSK with liskHub Now</a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div v-show="isCurrentTab(tabs.markets)"  class="l-tab l-row markets">
+                            <div class="markets-wrap">
+                                <div class="flex-row flex-right">
+                                    <!-- <div class="dropdown">
+                                        <div class="form-input text-nowrap shadow-box">▼ {{ limit }}</div>
+                                        <ul>
+                                            <li @click="setLimit( 0 )"><span class="text-faded">Show:</span> All</li>
+                                            <li @click="setLimit( 10 )"><span class="text-faded">Show:</span> 10</li>
+                                            <li @click="setLimit( 20 )"><span class="text-faded">Show:</span> 20</li>
+                                            <li @click="setLimit( 50 )"><span class="text-faded">Show:</span> 50</li>
+                                            <li @click="setLimit( 100 )"><span class="text-faded">Show:</span> 100</li>
+                                        </ul>
+                                    </div>
+                                    <div class="dropdown">
+                                        <div class="form-input text-nowrap shadow-box">▼ {{ sortLabel }}</div>
+                                        <ul>
+                                            <li @click="sortBy( 'token', 'asc' )"><span class="text-faded">Sort:</span> Token</li>
+                                            <li @click="sortBy( 'close', 'desc' )"><span class="text-faded">Sort:</span> Price</li>
+                                            <li @click="sortBy( 'assetVolume', 'desc' )"><span class="text-faded">Sort:</span> Volume</li>
+                                            <li @click="sortBy( 'percent', 'desc' )"><span class="text-faded">Sort:</span> Percent</li>
+                                            <li @click="sortBy( 'change', 'desc' )"><span class="text-faded">Sort:</span> Change</li>
+                                            <li @click="sortBy( 'trades', 'desc' )"><span class="text-faded">Sort:</span> Trades</li>
+                                        </ul>
+                                    </div> -->
+                                    <div class="dropdown">
+                                        <div class="form-input text-nowrap shadow-box">▼ {{ asset }}</div>
+                                        <ul>
+                                            <li @click="filterAsset( 'BTC' )"><span class="text-faded">Asset:</span> BTC</li>
+                                            <li @click="filterAsset( 'ETH' )"><span class="text-faded">Asset:</span> ETH</li>
+                                            <li @click="filterAsset( 'BNB' )"><span class="text-faded">Asset:</span> BNB</li>
+                                            <li @click="filterAsset( 'USDT' )"><span class="text-faded">Asset:</span> USDT</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="main-grid-list">
+                                    <template v-for="c in coinsList">
+                                        <template v-if="c.symbol.includes('LSK')">
+                                            <div class="main-grid-item" :key="c.symbol" :class="c.style">
+                                                <div class="main-grid-info flex-row flex-top flex-stretch">
+                                                    <div class="push-right">
+                                                        <img :src="c.icon" :alt="c.pair" />
+                                                    </div>
+                                                    <div class="flex-1 shadow-text">
+                                                        <div class="flex-row flex-top flex-space">
+                                                            <div class="text-left text-clip push-right">
+                                                                <h1 class="text-primary text-clip">{{ c.token }}<small class="text-faded text-small text-condense">/{{ c.asset }}</small></h1>
+                                                                <h2 class="text-bright text-clip">{{ c.close | toFixed( asset ) }}</h2>
+                                                            </div>
+                                                            <div class="text-right">
+                                                                <div class="color text-big text-clip">{{ c.arrow }} {{ c.sign }}{{ c.percent | toFixed( 2 ) }}%</div>
+                                                                <div class="text-clip">{{ c.sign }}{{ c.change | toFixed( asset ) }} <small class="text-faded">24h</small></div>
+                                                                <div class="text-clip">{{ c.assetVolume | toMoney }} <small class="text-faded">Vol</small></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="main-grid-chart">
+                                                    <linechart :width="600" :height="100" :values="c.history"></linechart>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- socket loader -->
+                        <div :style="{ 'background-color': statusColorFooter, 'opacity': statusOpacity }" class="l-row footer-row" :class="{ 'visible': loaderVisible }">
+                            <div class="loader-wrap">
+                                <div class="loader-content">
+                                    <div class="s-status" v-if="status === 0"><i>📡</i> <span>Connecting to Socket API ...</span></div>
+                                    <div class="s-status" v-else-if="status === 1"><i>💬</i> <span>Waiting for data from Socket API ...</span></div>
+                                    <div class="s-status" v-else-if="status === 2"><i>😃</i> <span>Connected to the Socket API</span></div>
+                                    <div class="s-status" v-else-if="status === -1"><i>😡</i> <span>Error connecting to the Socket API</span></div>
+                                </div>
+                            </div>
+                            <div class="copyright" v-html="copyright"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </script>
+    <script>
+        var liskPayData = {
+            ref: 'ecom-LSK-418',
+            id: '418',
+            amount: '5',
+            payToKey: '5794934788537923633L',
+            liskLogo: 'https://www.crypto-embassy.com/wp-content/plugins/woocommerce-gateway-lisk/assets/img/logo.svg',
+            defaultCurrency: 'eur',
+            defaultAsset: 'USDT',
+        };
+    </script>
+    <script type='text/javascript' src='./assets/js/lisk-pay.js'></script>
+    <script src="../scripts/pay.js"></script>
+</body>
+</html>
